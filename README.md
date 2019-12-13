@@ -6,3 +6,6 @@ This project provides an implementation of entanglement feature learning based o
 ## Requirements
 * Numpy
 * TensorFlow
+
+## Reference:
+Yi-Zhuang You, Zhao Yang, and Xiao-Liang Qi, [Phys. Rev. B 97, 045153](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.97.045153)
