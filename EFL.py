@@ -18,7 +18,7 @@ def py_func(func, inp, Tout, stateful=True, name=None, grad=None):
 def logdet_grad(op, grad):
     a = op.inputs[0]
     a_adj_inv = tf.check_numerics(
-                    tf.matrix_inverse(a, adjoint=True), 
+                    tf.linalg.inv(a, adjoint=True), 
                     'zero determinant')
     out_shape = tf.concat([tf.shape(a)[:-2], [1, 1]], axis=0)
     return tf.reshape(grad, out_shape) * a_adj_inv
@@ -85,6 +85,7 @@ class Region(object):
         else: # if config cached
             c = self._config # retrived the cache
         return c
+        
 # entanglement region server
 from itertools import combinations
 from scipy.special import binom
@@ -610,6 +611,7 @@ class DataServer(object):
             self.method = method # update method state
             self.region_server.fill(method) # fill the server by new method
         return self.pack(self.region_server.fetch(batch))
+
 # EFL machine
 from datetime import datetime
 class Machine(object):
@@ -734,15 +736,3 @@ def save(filename, obj):
 def load(filename):
     with open('./data/' + filename + '.dat', 'br') as infile:
         return pickle.load(infile)
-
-
-
-
-
-
-
-
-
-
-
-
