@@ -22,8 +22,8 @@ class IsingModel(object):
 
         return tf.convert_to_tensor(np.array(confs), dtype=tf.float64, name = 'confs')
 
-    # build model (given input log bound dimension lnD)
-    def build(self, lnD):
+    # build model (given input ising configurations and log bound dimension lnD )
+    def build(self, confs, lnD):
         self.lattice.build() # first build lattice
         # setup adjacency tensors as TF constants
         A_bg = tf.constant(self.lattice.adjten('1'),dtype = tf.float64, name = 'A_bg')
@@ -31,14 +31,11 @@ class IsingModel(object):
         As_J = tf.constant(self.lattice.adjten('wJ'),dtype = tf.float64, name = 'As_J')
         # boundary Ising configurations
         conf0 = tf.ones([self.lattice.size['wh']], dtype = tf.float64, name = 'conf0')
-        # self.confs = tf.compat.v1.placeholder(dtype = tf.float64, 
-        #         shape = [None, self.lattice.size['wh']], name = 'confs')
-        self.confs = self.ising_config()
 
         # external field configurations
         with tf.name_scope('h'):
             self.h = tf.dtypes.cast(lnD/2., tf.float64) # external field strength
-            hs = self.h * self.confs
+            hs = self.h * confs
             h0 = self.h * conf0
 
         # coupling strength (trainable variable)
@@ -61,7 +58,8 @@ class IsingModel(object):
 
         # Smdl denotes the entropy of Ising model
         self.Smdl = tf.subtract(self.Fs, self.F0, name = 'S_mdl')
-        # print(self.Smdl, self.Fs, self.F0)
+        #print(self.Smdl.numpy(), self.Fs.numpy(), self.F0.numpy())
+        
         # calculate cost function
         # Ssys is the entropy of physical system
         # with tf.name_scope('cost'):
