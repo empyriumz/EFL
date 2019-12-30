@@ -94,3 +94,132 @@ class IsingModel(object):
             F = -0.5*logdetA + F0
 
         return F   
+
+# EFL machine
+from datetime import datetime
+class Machine(object):
+    def __init__(self, model, system, method='weighted'):
+        self.model = model
+        self.system = system
+        self.method = method
+        self.data_server = DataServer(model, system)
+        self.graph = tf.Graph() # TF graph
+        # self.session = tf.compat.v1.Session(graph = self.graph) # TF session
+        self.para = None # parameter dict
+        # status flags
+        self._built = False
+
+    def __getattr__(self, attr):
+        if attr == 'info':
+            return self.model.info+self.system.info+''.join(str(x) for x in self.method)
+        else:
+            raise AttributeError("%s object has no attribute named %r" %
+                         (self.__class__.__name__, attr))
+
+    # build machine
+    # def build(self):
+    #     if not self._built: # if not built
+    #         self._built = True # change status
+    #         # build machine
+    #         self.system.build() # build system
+    #         # add nodes to the TF graph
+    #         with self.graph.as_default():
+    #             self.model.build(self.data_server.lnD) # build model
+    #             self.step = tf.Variable(0, name='step', trainable=False)
+    #             self.learning_rate = tf.compat.v1.placeholder(tf.float32,shape=[],name='lr')
+    #             self.beta1 = tf.compat.v1.placeholder(tf.float32,shape=[],name='beta1')
+    #             self.beta2 = tf.compat.v1.placeholder(tf.float32,shape=[],name='beta2')
+    #             self.epsilon = tf.compat.v1.placeholder(tf.float32,shape=[],name='epsilon')
+    #             self.optimizer = tf.compat.v1.train.AdamOptimizer(
+    #                             learning_rate=self.learning_rate, 
+    #                             beta1=self.beta1, 
+    #                             beta2=self.beta2, 
+    #                             epsilon=self.epsilon)
+    #             self.trainer = self.optimizer.minimize(self.model.cost, 
+    #                             global_step = self.step)
+    #             self.initializer = tf.compat.v1.global_variables_initializer()
+    #             self.regularizer = self.model.regularizer
+    #             self.writer = self.pipe() # set up data pipeline
+    #             self.saver = tf.compat.v1.train.Saver() # add saver
+
+    # build machine
+    def build(self, lr = 0.001):
+        if not self._built: # if not built
+            self._built = True # change status
+            # build machine
+            self.system.build() # build system
+            # add nodes to the TF graph
+            with self.graph.as_default():
+                self.model.build(self.data_server.lnD) # build model
+                self.step = tf.Variable(0, name='step', trainable=False)
+                self.optimizer = tf.optimizers.Adam(
+                                learning_rate = lr)
+                self.trainer = self.optimizer.minimize(self.cost, 
+                                global_step = self.step)
+                self.regularizer = self.model.regularizer
+                self.writer = self.pipe() # set up data pipeline
+                self.saver = tf.compat.v1.train.Saver() # add saver
+
+    # pipe data (by summary)
+    def pipe(self):
+        # get variable names
+        var_names = {i:name for name, i in self.model.lattice.slot_dict['wJ'].items()}
+        # go through each component of J
+        for i in range(self.model.lattice.size['wJ']):
+            tf.compat.v1.summary.scalar('J/{0}'.format(var_names[i]), self.model.J[i])
+        # optimizer slots
+        slot_names = self.optimizer.get_slot_names()
+        for slot_name in slot_names:
+            slot = self.optimizer.get_slot(self.model.J, slot_name)
+            for i in range(self.model.lattice.size['wJ']):
+                tf.compat.v1.summary.scalar('{0}/{1}'.format(slot_name, var_names[i]), slot[i])
+        self.summary = [tf.compat.v1.summary.merge_all(), self.step]
+        timestamp = datetime.now().strftime('%d%H%M%S')
+        return tf.compat.v1.summary.FileWriter('./log/' + timestamp)
+
+
+            
+    # train machine
+    def train(self, steps=1, check=20, method=None, batch=None, 
+            learning_rate=0.005, beta1=0.9, beta2=0.9, epsilon=1e-8):
+        self.build() # if not built, build it
+        if method is None:
+            method = self.method # by default, use global method
+        else:
+            self.method = method # otherwise method updated
+        # setup parameter feed dict
+        self.para = {self.learning_rate:learning_rate, 
+                    self.beta1:beta1, 
+                    self.beta2:beta2, 
+                    self.epsilon:epsilon}
+
+        # start training loop
+        for i in range(steps):
+            # construct the feed dict, attach data to para
+            self.feed = {**self.para, **self.data_server.fetch(method, batch)}
+            try: # zero determinant may cause a problem, try it
+                self.session.run(self.trainer, self.feed) # train one step
+            except tf.errors.InvalidArgumentError: # when things go wrong
+                continue # skip the rest, go the the next batch of data
+            self.session.run(self.regularizer) # run regularization
+            if self.session.run(self.step)%check == 0: # summarize
+                self.writer.add_summary(*self.session.run(self.summary, self.feed))
+
+    # graph export for visualization in TensorBoard 
+    def add_graph(self):
+        self.writer.add_graph(self.graph) # writter add graph
+
+    # save session
+    def save(self):
+        # save model, without saving the graph
+        path = self.saver.save(self.session, './machine/'+self.info, 
+                                write_meta_graph=False)
+        print('INFO:tensorflow:Saving parameters to %s'%path)
+
+    # load session
+    def load(self):
+        self.build() # if not built, build it
+        # restore model
+        self.saver.restore(self.session, './machine/'+self.info)
+        # session is initialized after loading 
+        self._initialized = True
