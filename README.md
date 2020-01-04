@@ -8,4 +8,4 @@ This project provides an implementation of entanglement feature learning based o
 * TensorFlow
 
 ## Reference:
-Yi-Zhuang You, Zhao Yang, and Xiao-Liang Qi, [Phys. Rev. B 97, 045153](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.97.045153)
+Yi-Zhuang You et.al, Machine learning spatial geometry from entanglement features,  [Phys. Rev. B 97, 045153](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.97.045153)
